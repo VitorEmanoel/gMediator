@@ -5,6 +5,16 @@ import (
 	"reflect"
 )
 
+var registeredHandlers map[reflect.Type]interface{}
+
+func RegisterRequest(request Request, handler interface{}) {
+	var requestType = reflect.TypeOf(request)
+	if requestType.Kind() == reflect.Ptr {
+		requestType = requestType.Elem()
+	}
+	registeredHandlers[requestType] = handler
+}
+
 type Container interface {
 	Inject(name string, data interface{})
 	RegisterRequest(request Request, handler interface{})
@@ -41,10 +51,19 @@ func (c *ContainerContext) Inject(name string, data interface{}) {
 }
 
 func NewContainer() Container {
-	return &ContainerContext{
+	var context = &ContainerContext{
 		Handlers: make(map[reflect.Type]interface{}),
 		InjectValues: make(map[string]interface{}),
 	}
+	for request, handler := range registeredHandlers {
+		context.register(request, handler)
+	}
+	return context
+}
+
+func (c *ContainerContext) register(requestType reflect.Type, handler interface{}) {
+	c.injectValues(handler)
+	c.Handlers[requestType] = handler
 }
 
 func (c *ContainerContext) RegisterRequest(request Request, handler interface{}) {
@@ -52,8 +71,7 @@ func (c *ContainerContext) RegisterRequest(request Request, handler interface{})
 	if requestType.Kind() == reflect.Ptr {
 		requestType = requestType.Elem()
 	}
-	c.injectValues(handler)
-	c.Handlers[requestType] = handler
+	c.register(requestType, handler)
 }
 
 func (c *ContainerContext) ExecuteRequest(request Request) (interface{}, error){
