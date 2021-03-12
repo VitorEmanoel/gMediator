@@ -5,7 +5,7 @@ import (
 	"reflect"
 )
 
-var registeredHandlers map[reflect.Type]interface{}
+var registeredHandlers = make(map[reflect.Type]interface{})
 
 func RegisterRequest(request Request, handler interface{}) {
 	var requestType = reflect.TypeOf(request)
