@@ -1,5 +1,9 @@
 package mediator
 
+import "errors"
+
+var InvalidHandlerForRequest = errors.New("invalid handler for request")
+
 type NotFoundHandlerError struct {
 }
 

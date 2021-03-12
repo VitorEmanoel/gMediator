@@ -7,19 +7,24 @@ type PingRequest struct {
 	Message		string
 }
 
-type PingRequestHandler struct {
+type Test struct {
+
 }
 
-func (p *PingRequestHandler) Handle(request Request) (interface{}, error) {
-	var pingRequest = request.(PingRequest)
-	return pingRequest.Message + " Pong", nil
+type PingRequestHandler struct {
+	Test       string       `inject:"testando"`
+}
+
+func (p *PingRequestHandler) Handle(request PingRequest) (interface{}, error) {
+	return request.Message + " Pong " + p.Test, nil
 }
 
 func TestNewMediator(t *testing.T) {
 	var mediator = NewMediator()
+	mediator.GetContainer().Inject("testando", "testeee")
 	mediator.GetContainer().RegisterRequest(PingRequest{}, &PingRequestHandler{})
 	response, err := mediator.Send(PingRequest{
-		Message: "Teste",
+		Message: "Ping",
 	})
 	if err != nil {
 		t.Error("Error in send mediator. Error: ", err.Error())
