@@ -1,6 +1,7 @@
 package mediator
 
 import (
+	"context"
 	"log"
 	"reflect"
 )
@@ -18,7 +19,7 @@ func RegisterRequest(request Request, handler interface{}) {
 type Container interface {
 	Inject(name string, data interface{})
 	RegisterRequest(request Request, handler interface{})
-	ExecuteRequest(request Request) (interface{}, error)
+	ExecuteRequest(ctx context.Context, request Request) (interface{}, error)
 }
 
 type ContainerContext struct {
@@ -74,7 +75,7 @@ func (c *ContainerContext) RegisterRequest(request Request, handler interface{})
 	c.register(requestType, handler)
 }
 
-func (c *ContainerContext) ExecuteRequest(request Request) (interface{}, error){
+func (c *ContainerContext) ExecuteRequest(ctx context.Context, request Request) (interface{}, error){
 	var requestType = reflect.TypeOf(request)
 	if requestType.Kind() == reflect.Ptr {
 		requestType = requestType.Elem()
@@ -86,7 +87,7 @@ func (c *ContainerContext) ExecuteRequest(request Request) (interface{}, error){
 	var reflectValueHandler = reflect.ValueOf(handler)
 	log.Println(reflectValueHandler.NumMethod())
 	handleMethod := reflectValueHandler.MethodByName("Handle")
-	var values = handleMethod.Call([]reflect.Value{reflect.ValueOf(request)})
+	var values = handleMethod.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(request)})
 	if len(values) != 2 {
 		return nil, InvalidHandlerForRequest
 	}
