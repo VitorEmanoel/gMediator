@@ -4,9 +4,8 @@ import "errors"
 
 var InvalidHandlerForRequest = errors.New("invalid handler for request")
 
-type NotFoundHandlerError struct {
-}
+var NotFoundHandler = errors.New("not found handler")
 
-func (err *NotFoundHandlerError) Error() string {
-	return "handler not found in container"
-}
+var NotExistsMediator = errors.New("not exists mediator")
+
+var NotExistsContainer = errors.New("not exists container")
