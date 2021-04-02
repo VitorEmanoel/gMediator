@@ -1,30 +1,40 @@
 package mediator
 
 import (
-	"context"
-	"log"
 	"reflect"
 )
 
+var globalContainer *ContainerContext
+
 var registeredHandlers = make(map[reflect.Type]interface{})
 
-func RegisterRequest(request Request, handler interface{}) {
-	var requestType = reflect.TypeOf(request)
-	if requestType.Kind() == reflect.Ptr {
-		requestType = requestType.Elem()
+func RegisterRequest(request IRequest, handler interface{}) {
+	if globalContainer == nil{
+		var requestType = reflect.TypeOf(request)
+		if requestType.Kind() == reflect.Ptr {
+			requestType = requestType.Elem()
+		}
+		registeredHandlers[requestType] = handler
+		return
 	}
-	registeredHandlers[requestType] = handler
+	globalContainer.RegisterRequest(request, handler)
+}
+
+type Handler struct {
+	Handler     interface{}
+	Callbacks   []*Callback
 }
 
 type Container interface {
 	Inject(name string, data interface{})
-	RegisterRequest(request Request, handler interface{})
-	ExecuteRequest(ctx context.Context, request Request) (interface{}, error)
+	RegisterRequest(request IRequest, handler interface{})
+	RegisterCallback(request IRequest, callback *Callback)
+	ExecuteRequest(request IRequest) (interface{}, error)
 }
 
 type ContainerContext struct {
-	Handlers	map[reflect.Type]interface{}
-	InjectValues      map[string]interface{}
+	Handlers            map[reflect.Type]*Handler
+	InjectValues        map[string]interface{}
 }
 
 func (c *ContainerContext) injectValues(data interface{}) {
@@ -51,23 +61,15 @@ func (c *ContainerContext) Inject(name string, data interface{}) {
 	c.InjectValues[name] = data
 }
 
-func NewContainer() Container {
-	var context = &ContainerContext{
-		Handlers: make(map[reflect.Type]interface{}),
-		InjectValues: make(map[string]interface{}),
-	}
-	for request, handler := range registeredHandlers {
-		context.register(request, handler)
-	}
-	return context
-}
-
 func (c *ContainerContext) register(requestType reflect.Type, handler interface{}) {
 	c.injectValues(handler)
-	c.Handlers[requestType] = handler
+	handlerValue := Handler{
+		Handler:   handler,
+	}
+	c.Handlers[requestType] = &handlerValue
 }
 
-func (c *ContainerContext) RegisterRequest(request Request, handler interface{}) {
+func (c *ContainerContext) RegisterRequest(request IRequest, handler interface{}) {
 	var requestType = reflect.TypeOf(request)
 	if requestType.Kind() == reflect.Ptr {
 		requestType = requestType.Elem()
@@ -75,19 +77,41 @@ func (c *ContainerContext) RegisterRequest(request Request, handler interface{})
 	c.register(requestType, handler)
 }
 
-func (c *ContainerContext) ExecuteRequest(ctx context.Context, request Request) (interface{}, error){
+func (c *ContainerContext) RegisterCallback(request IRequest, callback *Callback) {
 	var requestType = reflect.TypeOf(request)
 	if requestType.Kind() == reflect.Ptr {
 		requestType = requestType.Elem()
 	}
 	handler, ok := c.Handlers[requestType]
 	if !ok {
-		return nil, &NotFoundHandlerError{}
+		return
 	}
-	var reflectValueHandler = reflect.ValueOf(handler)
-	log.Println(reflectValueHandler.NumMethod())
+	handler.Callbacks = append(handler.Callbacks, callback)
+}
+
+func (c *ContainerContext) callCallbacks(handler *Handler, callbackType CallbackType, values... reflect.Value) []reflect.Value{
+	for _, callback := range handler.Callbacks {
+		if callback.Type == callbackType {
+			var callbackValue = reflect.ValueOf(callback.Func)
+			return callbackValue.Call(values)
+		}
+	}
+	return nil
+}
+
+func (c *ContainerContext) ExecuteRequest(request IRequest) (interface{}, error){
+	var requestType = reflect.TypeOf(request)
+	if requestType.Kind() == reflect.Ptr {
+		requestType = requestType.Elem()
+	}
+	handler, ok := c.Handlers[requestType]
+	if !ok {
+		return nil, NotFoundHandler
+	}
+	var reflectValueHandler = reflect.ValueOf(handler.Handler)
 	handleMethod := reflectValueHandler.MethodByName("Handle")
-	var values = handleMethod.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(request)})
+	c.callCallbacks(handler, Before, reflect.ValueOf(request))
+	var values = handleMethod.Call([]reflect.Value{reflect.ValueOf(request)})
 	if len(values) != 2 {
 		return nil, InvalidHandlerForRequest
 	}
@@ -97,5 +121,26 @@ func (c *ContainerContext) ExecuteRequest(ctx context.Context, request Request) 
 	if errValue != nil && !ok {
 		return nil, InvalidHandlerForRequest
 	}
+	finalValues := c.callCallbacks(handler, After, reflect.ValueOf(request), values[0], values[1])
+	if finalValues != nil {
+		value = finalValues[0].Interface()
+		errValue := finalValues[1].Interface()
+		err, ok = errValue.(error)
+		if errValue != nil && !ok {
+			return nil, InvalidHandlerForRequest
+		}
+	}
 	return value, err
+}
+
+func NewContainer() Container {
+	var ctx = &ContainerContext{
+		Handlers: make(map[reflect.Type]*Handler),
+		InjectValues: make(map[string]interface{}),
+	}
+	for request, handler := range registeredHandlers {
+		ctx.register(request, handler)
+	}
+	globalContainer = ctx
+	return ctx
 }
