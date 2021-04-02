@@ -130,7 +130,7 @@ func ChangeContextCallback(request *TestContextPingRequest) {
 func TestMediatorWithBeforeCallback(t *testing.T) {
 	var mediator = NewMediator()
 	RegisterRequest(&TestContextPingRequest{}, &TestContextPingRequestHandler{})
-	mediator.GetContainer().RegisterCallback(&TestContextPingRequest{}, NewCallback(Before, ChangeContextCallback))
+	mediator.GetContainer().RegisterCallbacks(&TestContextPingRequest{}, NewCallback(Before, ChangeContextCallback))
 	var ctx = context.WithValue(context.Background(), "test", "Ping")
 	response, err := Send(&TestContextPingRequest{}, WithContext(ctx))
 	assert.Nil(t, err)
@@ -145,7 +145,7 @@ func ChangeResponseCallback(request *TestContextPingRequest, value string, err e
 func TestMediatorWithAfterCallback(t *testing.T) {
 	var mediator = NewMediator()
 	RegisterRequest(&TestContextPingRequest{}, &TestContextPingRequestHandler{})
-	mediator.GetContainer().RegisterCallback(&TestContextPingRequest{}, NewCallback(After, ChangeResponseCallback))
+	mediator.GetContainer().RegisterCallbacks(&TestContextPingRequest{}, NewCallback(After, ChangeResponseCallback))
 	var ctx = context.WithValue(context.Background(), "test", "Ping")
 	response, err := Send(&TestContextPingRequest{}, WithContext(ctx))
 	assert.Nil(t, err)
@@ -156,8 +156,18 @@ func TestMediatorWithAfterCallback(t *testing.T) {
 func TestMediatorWithAfterAndBeforeCallback(t *testing.T) {
 	var mediator = NewMediator()
 	RegisterRequest(&TestContextPingRequest{}, &TestContextPingRequestHandler{})
-	mediator.GetContainer().RegisterCallback(&TestContextPingRequest{}, NewCallback(After, ChangeResponseCallback))
-	mediator.GetContainer().RegisterCallback(&TestContextPingRequest{}, NewCallback(Before, ChangeContextCallback))
+	mediator.GetContainer().RegisterCallbacks(&TestContextPingRequest{}, NewCallback(After, ChangeResponseCallback),  NewCallback(Before, ChangeContextCallback))
+	var ctx = context.WithValue(context.Background(), "test", "Ping")
+	response, err := Send(&TestContextPingRequest{}, WithContext(ctx))
+	assert.Nil(t, err)
+	assert.Equal(t, "Ping Ping Pong Pong", response)
+	t.Cleanup(cleanGlobals)
+}
+
+func TestMediatorWithAfterCallbackGlobalRegister(t *testing.T) {
+	RegisterRequest(&TestContextPingRequest{}, &TestContextPingRequestHandler{})
+	RegisterCallbacks(&TestContextPingRequest{}, NewCallback(After, ChangeResponseCallback), NewCallback(Before, ChangeContextCallback))
+	NewMediator()
 	var ctx = context.WithValue(context.Background(), "test", "Ping")
 	response, err := Send(&TestContextPingRequest{}, WithContext(ctx))
 	assert.Nil(t, err)

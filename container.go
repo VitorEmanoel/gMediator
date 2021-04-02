@@ -7,6 +7,7 @@ import (
 var globalContainer *ContainerContext
 
 var registeredHandlers = make(map[reflect.Type]interface{})
+var registeredCallbacks = make(map[reflect.Type][]*Callback)
 
 func RegisterRequest(request IRequest, handler interface{}) {
 	if globalContainer == nil{
@@ -20,6 +21,20 @@ func RegisterRequest(request IRequest, handler interface{}) {
 	globalContainer.RegisterRequest(request, handler)
 }
 
+func RegisterCallbacks(request IRequest, callbacks ...*Callback) {
+	if globalContainer == nil {
+		var requestType = reflect.TypeOf(request)
+		if requestType.Kind() == reflect.Ptr {
+			requestType = requestType.Elem()
+		}
+		localCallbacks := registeredCallbacks[requestType]
+		localCallbacks = append(localCallbacks, callbacks...)
+		registeredCallbacks[requestType] = localCallbacks
+		return
+	}
+	globalContainer.RegisterCallbacks(request, callbacks...)
+}
+
 type Handler struct {
 	Handler     interface{}
 	Callbacks   []*Callback
@@ -28,7 +43,7 @@ type Handler struct {
 type Container interface {
 	Inject(name string, data interface{})
 	RegisterRequest(request IRequest, handler interface{})
-	RegisterCallback(request IRequest, callback *Callback)
+	RegisterCallbacks(request IRequest, callback ...*Callback)
 	ExecuteRequest(request IRequest) (interface{}, error)
 }
 
@@ -77,7 +92,7 @@ func (c *ContainerContext) RegisterRequest(request IRequest, handler interface{}
 	c.register(requestType, handler)
 }
 
-func (c *ContainerContext) RegisterCallback(request IRequest, callback *Callback) {
+func (c *ContainerContext) RegisterCallbacks(request IRequest, callbacks ...*Callback) {
 	var requestType = reflect.TypeOf(request)
 	if requestType.Kind() == reflect.Ptr {
 		requestType = requestType.Elem()
@@ -86,8 +101,9 @@ func (c *ContainerContext) RegisterCallback(request IRequest, callback *Callback
 	if !ok {
 		return
 	}
-	handler.Callbacks = append(handler.Callbacks, callback)
+	handler.Callbacks = append(handler.Callbacks, callbacks...)
 }
+
 
 func (c *ContainerContext) callCallbacks(handler *Handler, callbackType CallbackType, values... reflect.Value) []reflect.Value{
 	for _, callback := range handler.Callbacks {
@@ -140,6 +156,10 @@ func NewContainer() Container {
 	}
 	for request, handler := range registeredHandlers {
 		ctx.register(request, handler)
+		if _, exists := registeredCallbacks[request]; !exists {
+			continue
+		}
+		ctx.Handlers[request].Callbacks = append(ctx.Handlers[request].Callbacks, registeredCallbacks[request]...)
 	}
 	globalContainer = ctx
 	return ctx
