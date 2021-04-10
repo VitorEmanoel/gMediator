@@ -52,13 +52,13 @@ type ContainerContext struct {
 	InjectValues        map[string]interface{}
 }
 
-func (c *ContainerContext) injectValues(data interface{}) {
+func (c *ContainerContext) injectValues(data interface{}, inject string) {
 	var dataType = reflect.TypeOf(data).Elem()
 	var dataValue = reflect.ValueOf(data)
 	for i := 0; i < dataType.NumField(); i++ {
 		var field = dataType.Field(i)
 		var injectName = field.Tag.Get("inject")
-		if injectName == "" {
+		if injectName == "" || (inject != "" && inject != injectName){
 			continue
 		}
 		injectValue, exists := c.InjectValues[injectName]
@@ -74,10 +74,13 @@ func (c *ContainerContext) injectValues(data interface{}) {
 
 func (c *ContainerContext) Inject(name string, data interface{}) {
 	c.InjectValues[name] = data
+	for _, handler := range c.Handlers {
+		c.injectValues(*handler, name)
+	}
 }
 
 func (c *ContainerContext) register(requestType reflect.Type, handler interface{}) {
-	c.injectValues(handler)
+	c.injectValues(handler, "")
 	handlerValue := Handler{
 		Handler:   handler,
 	}
