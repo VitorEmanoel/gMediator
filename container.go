@@ -75,7 +75,7 @@ func (c *ContainerContext) injectValues(data interface{}, inject string) {
 func (c *ContainerContext) Inject(name string, data interface{}) {
 	c.InjectValues[name] = data
 	for _, handler := range c.Handlers {
-		c.injectValues(*handler, name)
+		c.injectValues(handler, name)
 	}
 }
 
